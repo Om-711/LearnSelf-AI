@@ -4,6 +4,7 @@ import os
 
 import streamlit as st
 from dotenv import load_dotenv
+from streamlit.errors import StreamlitSecretNotFoundError
 
 from database import Database
 from memory_workflow import build_remember_graph
@@ -17,7 +18,13 @@ st.set_page_config(page_title="LearnSelf | Study companion", page_icon="📚", l
 def get_database() -> Database:
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
-        raise RuntimeError("DATABASE_URL is missing. Copy .env.example to .env and configure PostgreSQL.")
+        try:
+            database_url = st.secrets["DATABASE_URL"]
+        except (KeyError, StreamlitSecretNotFoundError):
+            database_url = None
+
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is not configured in the local environment or Streamlit secrets.")
     return Database(database_url)
 
 
