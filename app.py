@@ -14,15 +14,23 @@ load_dotenv()
 st.set_page_config(page_title="LearnSelf | Study companion", page_icon="📚", layout="wide")
 
 
+def setting(name: str) -> str | None:
+    """Read a setting from local environment variables or Streamlit secrets."""
+    value = os.getenv(name)
+    if value:
+        return value.strip()
+
+    try:
+        value = st.secrets.get(name)
+    except StreamlitSecretNotFoundError:
+        value = None
+
+    return str(value).strip() if value else None
+
+
 @st.cache_resource
 def get_database() -> Database:
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        try:
-            database_url = st.secrets["DATABASE_URL"]
-        except (KeyError, StreamlitSecretNotFoundError):
-            database_url = None
-
+    database_url = setting("DATABASE_URL")
     if not database_url:
         raise RuntimeError("DATABASE_URL is not configured in the local environment or Streamlit secrets.")
     return Database(database_url)
@@ -53,7 +61,7 @@ try:
     db = get_database()
 except Exception as error:
     st.error(f"Database connection failed: {error}")
-    st.info("Run `docker compose up -d`, copy `.env.example` to `.env`, then restart the app.")
+    st.info("For local use, configure `.env`. For Streamlit Cloud, add DATABASE_URL under App settings → Secrets.")
     st.stop()
 
 if "chat_id" not in st.session_state or not db.chat_exists(st.session_state.chat_id):
