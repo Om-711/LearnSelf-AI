@@ -3,28 +3,28 @@
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, create_engine, func, select
+from sqlalchemy import DateTime, ForeignKey, String, Text, create_engine, delete, func, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
-
-
-DEFAULT_LESSONS = [
-    ("Python foundations", "Variables, collections, and control flow"),
-    ("Functions", "Parameters, return values, and scope"),
-    ("Working with APIs", "Requests, JSON, and error handling"),
-    ("Mini project", "Build and reflect on a small application"),
-]
 
 
 class Base(DeclarativeBase):
     pass
 
 
-class Lesson(Base):
-    __tablename__ = "lessons"
+class Subject(Base):
+    __tablename__ = "subjects"
     id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[str] = mapped_column(String(120))
-    description: Mapped[str] = mapped_column(String(280))
-    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    name: Mapped[str] = mapped_column(String(120), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Topic(Base):
+    __tablename__ = "topics"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    status: Mapped[str] = mapped_column(String(20), default="Not Started")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Chat(Base):
@@ -58,33 +58,59 @@ class Database:
     def __init__(self, url: str):
         self.engine = create_engine(url, pool_pre_ping=True)
         Base.metadata.create_all(self.engine)
-        self._add_default_lessons()
 
-    def _add_default_lessons(self) -> None:
+    # Subjects and topics --------------------------------------------------
+    def subjects(self) -> list[Subject]:
         with Session(self.engine) as session:
-            if session.scalar(select(func.count()).select_from(Lesson)) == 0:
-                session.add_all(Lesson(title=title, description=description) for title, description in DEFAULT_LESSONS)
+            return list(session.scalars(select(Subject).order_by(Subject.name)).all())
+
+    def add_subject(self, name: str) -> None:
+        with Session(self.engine) as session:
+            if session.scalar(select(Subject).where(Subject.name == name)) is None:
+                session.add(Subject(name=name))
                 session.commit()
 
-    # Learning progress -----------------------------------------------------
-    def lessons(self) -> list[Lesson]:
+    def delete_subject(self, subject_id: int) -> None:
         with Session(self.engine) as session:
-            return list(session.scalars(select(Lesson).order_by(Lesson.id)))
-
-    def set_lesson_complete(self, lesson_id: int, completed: bool) -> None:
-        with Session(self.engine) as session:
-            lesson = session.get(Lesson, lesson_id)
-            if lesson is None:
-                raise ValueError("Lesson not found")
-            lesson.completed = completed
+            session.execute(delete(Topic).where(Topic.subject_id == subject_id))
+            session.execute(delete(Subject).where(Subject.id == subject_id))
             session.commit()
 
-    def progress(self) -> tuple[int, int, int]:
+    def topics(self, subject_id: int) -> list[Topic]:
         with Session(self.engine) as session:
-            done, total = session.execute(
-                select(func.count(Lesson.id).filter(Lesson.completed.is_(True)), func.count(Lesson.id))
+            return list(session.scalars(
+                select(Topic).where(Topic.subject_id == subject_id).order_by(Topic.id)
+            ).all())
+
+    def add_topic(self, subject_id: int, name: str) -> None:
+        with Session(self.engine) as session:
+            session.add(Topic(subject_id=subject_id, name=name))
+            session.commit()
+
+    def delete_topic(self, topic_id: int) -> None:
+        with Session(self.engine) as session:
+            session.execute(delete(Topic).where(Topic.id == topic_id))
+            session.commit()
+
+    def set_topic_status(self, topic_id: int, status: str) -> None:
+        if status not in {"Not Started", "In Progress", "Completed"}:
+            raise ValueError("Invalid topic status")
+        with Session(self.engine) as session:
+            topic = session.get(Topic, topic_id)
+            if topic is None:
+                raise ValueError("Topic not found")
+            topic.status = status
+            session.commit()
+
+    def topic_progress(self) -> tuple[int, int, int]:
+        with Session(self.engine) as session:
+            completed, total = session.execute(
+                select(
+                    func.count(Topic.id).filter(Topic.status == "Completed"),
+                    func.count(Topic.id),
+                )
             ).one()
-        return done, total, round(done / total * 100) if total else 0
+        return completed, total, round(completed / total * 100) if total else 0
 
     # Conversations ---------------------------------------------------------
     def new_chat(self) -> str:

@@ -1,12 +1,12 @@
 # LearnSelf
 
-LearnSelf is a personal learning companion for tracking course progress and getting contextual help from an AI tutor. It combines a simple learning dashboard with a Gemini-powered chat experience that remembers the learner's stated goals and preferred learning style within each conversation.
+LearnSelf is a simple learning tracker for organizing subjects and topics, monitoring completion, and getting contextual help from an AI tutor.
 
 ## Highlights
 
-- Track completed lessons and view overall course progress.
+- Create subjects and topics, track each topic as Not Started, In Progress, or Completed, and view overall completion.
 - Persist learning progress, conversations, and memory in PostgreSQL.
-- Ask Gemini for explanations, examples, quizzes, and study plans.
+- Enter a topic and receive a simple explanation, key concepts, one practical example, and 2–3 practice questions.
 - Stream answers live, with feedback while the model is preparing its first response.
 - Create independent conversations with visible chat IDs.
 - Preserve the complete message history for each chat.
@@ -50,7 +50,7 @@ GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-2.5-flash
 ```
 
-`docker compose up -d` starts the local PostgreSQL database. The application creates its tables and seeds the initial lessons automatically.
+`docker compose up -d` starts the local PostgreSQL database. The application creates its subject, topic, chat, and memory tables automatically.
 
 ## How memory works
 
@@ -65,7 +65,7 @@ These memories are stored in PostgreSQL and shown in the **What I remember about
 ## Project structure
 
 ```text
-app.py                Streamlit interface
+app.py                Streamlit interface for subjects, topics, progress, and chat
 database.py           PostgreSQL models and all data operations
 tutor.py              Gemini streaming adapter
 memory_workflow.py    LangGraph memory extraction workflow
@@ -74,7 +74,7 @@ docker-compose.yml    Local PostgreSQL service
 
 ## Design notes
 
-The Streamlit UI keeps the learning loop small: view progress, mark lessons complete, and ask for help. PostgreSQL stores progress and chat data, while Gemini is called on the server so the API key is not exposed in the browser. The memory workflow is separate from response generation: Gemini streams the answer first, then the LangGraph `remember` node extracts only facts the learner explicitly shared.
+The Streamlit UI keeps the learning loop small: add subjects, add topics, change topic status, view overall completion, and ask for help. PostgreSQL stores subject/topic progress and chat data, while Gemini is called on the server so the API key is not exposed in the browser. The memory workflow is separate from response generation: Gemini streams the answer first, then the LangGraph `remember` node extracts only facts the learner explicitly shared.
 
 The main risks are temporary Gemini failures, inaccurate AI explanations, and storing learner information without enough control. The app reports API errors clearly, asks Gemini to be transparent when uncertain, and limits memory to explicit learning details scoped to one chat. A production version should add authentication, memory edit/delete controls, retries, rate limits, approved course-content retrieval, database migrations, automated tests, and monitoring.
 
