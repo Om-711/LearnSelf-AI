@@ -88,11 +88,11 @@ class Database:
 
     # Conversations ---------------------------------------------------------
     def new_chat(self) -> str:
-        chat = Chat(id=str(uuid4()))
+        chat_id = str(uuid4())
         with Session(self.engine) as session:
-            session.add(chat)
+            session.add(Chat(id=chat_id))
             session.commit()
-        return chat.id
+        return chat_id
 
     def chat_exists(self, chat_id: str) -> bool:
         with Session(self.engine) as session:
